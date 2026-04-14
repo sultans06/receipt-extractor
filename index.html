@@ -1,1 +1,1125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Receipt Extractor</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.3.136/pdf.min.mjs" type="module"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <style>
+    :root {
+      --bg: #f6f7fb;
+      --card: #ffffff;
+      --text: #1d2433;
+      --muted: #667085;
+      --border: #d9deea;
+      --accent: #1f4acc;
+      --accent-soft: #eaf0ff;
+      --danger: #b42318;
+      --success: #067647;
+      --shadow: 0 10px 30px rgba(16, 24, 40, 0.08);
+      --radius: 18px;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .wrap {
+      max-width: 1320px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    h1, h2, h3 { margin: 0; }
+    .hero {
+      display: grid;
+      grid-template-columns: 1.3fr 0.7fr;
+      gap: 18px;
+      margin-bottom: 18px;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 18px;
+    }
+
+    .title {
+      font-size: 28px;
+      font-weight: 800;
+      margin-bottom: 8px;
+    }
+
+    .sub {
+      color: var(--muted);
+      line-height: 1.5;
+      font-size: 14px;
+    }
+
+    .pill-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 14px;
+    }
+
+    .pill {
+      background: var(--accent-soft);
+      color: var(--accent);
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 360px 1fr;
+      gap: 18px;
+      align-items: start;
+    }
+
+    .upload-box {
+      border: 2px dashed var(--border);
+      border-radius: 16px;
+      padding: 18px;
+      text-align: center;
+      background: #fbfcff;
+    }
+
+    .upload-box.dragover {
+      border-color: var(--accent);
+      background: var(--accent-soft);
+    }
+
+    .btn, button {
+      border: none;
+      background: var(--accent);
+      color: white;
+      padding: 12px 16px;
+      border-radius: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    button.secondary, .btn.secondary {
+      background: white;
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    button.ghost {
+      background: transparent;
+      color: var(--accent);
+      border: 1px solid var(--border);
+    }
+
+    button.danger {
+      background: #fee4e2;
+      color: var(--danger);
+      border: 1px solid #fecdca;
+    }
+
+    .controls, .row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    input[type="file"] { display: none; }
+
+    label.file-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      background: var(--accent);
+      color: white;
+      padding: 12px 16px;
+      border-radius: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .muted { color: var(--muted); }
+    .tiny { font-size: 12px; }
+
+    .section-title {
+      font-size: 18px;
+      font-weight: 800;
+      margin-bottom: 12px;
+    }
+
+    .status {
+      margin-top: 14px;
+      padding: 12px;
+      border-radius: 12px;
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      min-height: 56px;
+      font-size: 14px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+    }
+
+    .preview {
+      margin-top: 14px;
+      display: grid;
+      gap: 10px;
+    }
+
+    .thumb {
+      width: 100%;
+      max-height: 260px;
+      object-fit: contain;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: white;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    .field {
+      display: grid;
+      gap: 6px;
+    }
+
+    .field.full { grid-column: 1 / -1; }
+
+    .field label {
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .field input, .field select, .field textarea {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 11px 12px;
+      font: inherit;
+      background: white;
+    }
+
+    textarea { min-height: 120px; resize: vertical; }
+
+    .split {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    .stat {
+      padding: 16px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: #fcfcff;
+    }
+
+    .stat .k { font-size: 12px; color: var(--muted); }
+    .stat .v { margin-top: 6px; font-size: 22px; font-weight: 800; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      background: white;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    th, td {
+      padding: 12px 10px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      font-size: 13px;
+      vertical-align: top;
+    }
+
+    th {
+      background: #f8f9fc;
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    .table-wrap {
+      overflow: auto;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      margin-top: 12px;
+      background: white;
+    }
+
+    .tag {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: #eef2ff;
+      color: #3538cd;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .note {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.45;
+      margin-top: 10px;
+    }
+
+    @media (max-width: 1080px) {
+      .hero, .grid, .split, .summary-grid, .form-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="hero">
+      <div class="card">
+        <div class="title">Receipt Extractor</div>
+        <div class="sub">
+          Upload receipt images or PDFs, extract the key information, review it, save it locally in your browser, and export it to Excel or CSV.
+          This version is designed to stay free by processing files in the browser.
+        </div>
+        <div class="pill-row">
+          <span class="pill">Images: JPG / PNG</span>
+          <span class="pill">PDF receipts</span>
+          <span class="pill">Excel export</span>
+          <span class="pill">CSV export</span>
+          <span class="pill">Local browser storage</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="section-title">How this works</div>
+        <div class="sub">
+          1. Upload a receipt image or PDF<br>
+          2. The app extracts or OCRs the text<br>
+          3. It fills the fields for you<br>
+          4. You correct anything that looks off<br>
+          5. Save and export to Excel
+        </div>
+        <div class="note">
+          OCR is never perfect. Clean, bright, flat receipts work best. Always review extracted values before exporting.
+        </div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <div class="section-title">Upload receipt</div>
+        <div id="dropZone" class="upload-box">
+          <div style="font-size: 16px; font-weight: 800; margin-bottom: 8px;">Drop files here</div>
+          <div class="muted tiny" style="margin-bottom: 14px;">Or choose receipt images and PDFs from your device</div>
+          <label class="file-btn" for="fileInput">Choose Files</label>
+          <input id="fileInput" type="file" accept="image/*,.pdf" multiple />
+          <div class="note">Supported: JPG, PNG, PDF</div>
+        </div>
+
+        <div class="controls" style="margin-top: 14px;">
+          <button id="processAllBtn">Process All Pending Files</button>
+          <button class="secondary" id="clearPendingBtn">Clear Pending</button>
+        </div>
+
+        <div class="status" id="statusBox">No files uploaded yet.</div>
+
+        <div class="preview" id="previewArea"></div>
+      </div>
+
+      <div>
+        <div class="card">
+          <div class="row" style="justify-content: space-between;">
+            <div>
+              <div class="section-title">Review extracted information</div>
+              <div class="muted tiny">Edit anything before saving it to your receipt table.</div>
+            </div>
+            <div class="row">
+              <button class="secondary" id="newBlankBtn">New Blank Entry</button>
+              <button id="saveEntryBtn">Save Entry</button>
+            </div>
+          </div>
+
+          <div class="form-grid">
+            <div class="field">
+              <label>Supplier Name</label>
+              <input id="supplier" placeholder="Example: Walmart" />
+            </div>
+            <div class="field">
+              <label>Invoice / Receipt Date</label>
+              <input id="invoiceDate" type="date" />
+            </div>
+            <div class="field">
+              <label>Category / Type</label>
+              <select id="category">
+                <option value="Office Supplies">Office Supplies</option>
+                <option value="Meals">Meals</option>
+                <option value="Travel">Travel</option>
+                <option value="Fuel">Fuel</option>
+                <option value="Vehicle">Vehicle</option>
+                <option value="Software">Software</option>
+                <option value="Utilities">Utilities</option>
+                <option value="Rent">Rent</option>
+                <option value="Shipping">Shipping</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Subtotal / Before Tax</label>
+              <input id="subtotal" type="number" step="0.01" placeholder="0.00" />
+            </div>
+            <div class="field">
+              <label>GST / HST</label>
+              <input id="gst" type="number" step="0.01" placeholder="0.00" />
+            </div>
+            <div class="field">
+              <label>PST</label>
+              <input id="pst" type="number" step="0.01" placeholder="0.00" />
+            </div>
+            <div class="field">
+              <label>Total Tax</label>
+              <input id="totalTax" type="number" step="0.01" placeholder="0.00" />
+            </div>
+            <div class="field">
+              <label>Total / After Tax</label>
+              <input id="total" type="number" step="0.01" placeholder="0.00" />
+            </div>
+            <div class="field">
+              <label>Source File</label>
+              <input id="sourceFile" placeholder="Uploaded filename" />
+            </div>
+            <div class="field full">
+              <label>Raw Extracted Text</label>
+              <textarea id="rawText" placeholder="OCR or extracted PDF text will appear here"></textarea>
+            </div>
+          </div>
+
+          <div class="row" style="margin-top: 14px; justify-content: space-between;">
+            <div class="note">Automatic math updates when you change subtotal, taxes, or total.</div>
+            <div class="row">
+              <button class="ghost" id="recalcBtn">Recalculate</button>
+              <button class="secondary" id="clearFormBtn">Clear Form</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="split" style="margin-top: 18px;">
+          <div class="card">
+            <div class="row" style="justify-content: space-between;">
+              <div>
+                <div class="section-title">Summary dashboard</div>
+                <div class="muted tiny">Quick view of your saved records</div>
+              </div>
+              <button class="secondary" id="refreshSummaryBtn">Refresh</button>
+            </div>
+            <div class="summary-grid">
+              <div class="stat"><div class="k">Receipts</div><div class="v" id="statCount">0</div></div>
+              <div class="stat"><div class="k">Subtotal</div><div class="v" id="statSubtotal">$0.00</div></div>
+              <div class="stat"><div class="k">Total Tax</div><div class="v" id="statTax">$0.00</div></div>
+              <div class="stat"><div class="k">Grand Total</div><div class="v" id="statTotal">$0.00</div></div>
+            </div>
+
+            <div class="section-title" style="margin-top: 18px;">Breakdown by type</div>
+            <div id="typeBreakdown" class="muted tiny">No data yet.</div>
+
+            <div class="section-title" style="margin-top: 18px;">Breakdown by month</div>
+            <div id="monthBreakdown" class="muted tiny">No data yet.</div>
+          </div>
+
+          <div class="card">
+            <div class="section-title">Export & storage</div>
+            <div class="controls" style="margin-top: 10px;">
+              <button id="exportCsvBtn">Export CSV</button>
+              <button id="exportXlsxBtn">Export Excel</button>
+              <button class="secondary" id="downloadJsonBtn">Backup JSON</button>
+              <button class="danger" id="clearAllBtn">Delete All Saved Data</button>
+            </div>
+            <div class="note">
+              Saved receipts stay in this browser. If you clear browser storage or switch devices, they will not move with you unless you export or back them up.
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top: 18px;">
+          <div class="row" style="justify-content: space-between;">
+            <div>
+              <div class="section-title">Saved receipts</div>
+              <div class="muted tiny">Click any row to load it back into the form</div>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Supplier</th>
+                  <th>Type</th>
+                  <th>Subtotal</th>
+                  <th>GST/HST</th>
+                  <th>PST</th>
+                  <th>Total Tax</th>
+                  <th>Total</th>
+                  <th>File</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="recordsTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import * as pdfjsLib from 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.3.136/pdf.min.mjs';
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.3.136/pdf.worker.min.mjs';
+
+    const STORAGE_KEY = 'receipt_extractor_records_v1';
+    let pendingFiles = [];
+    let editingId = null;
+
+    const els = {
+      fileInput: document.getElementById('fileInput'),
+      dropZone: document.getElementById('dropZone'),
+      previewArea: document.getElementById('previewArea'),
+      statusBox: document.getElementById('statusBox'),
+      processAllBtn: document.getElementById('processAllBtn'),
+      clearPendingBtn: document.getElementById('clearPendingBtn'),
+      supplier: document.getElementById('supplier'),
+      invoiceDate: document.getElementById('invoiceDate'),
+      category: document.getElementById('category'),
+      subtotal: document.getElementById('subtotal'),
+      gst: document.getElementById('gst'),
+      pst: document.getElementById('pst'),
+      totalTax: document.getElementById('totalTax'),
+      total: document.getElementById('total'),
+      sourceFile: document.getElementById('sourceFile'),
+      rawText: document.getElementById('rawText'),
+      saveEntryBtn: document.getElementById('saveEntryBtn'),
+      clearFormBtn: document.getElementById('clearFormBtn'),
+      recalcBtn: document.getElementById('recalcBtn'),
+      recordsTableBody: document.getElementById('recordsTableBody'),
+      exportCsvBtn: document.getElementById('exportCsvBtn'),
+      exportXlsxBtn: document.getElementById('exportXlsxBtn'),
+      refreshSummaryBtn: document.getElementById('refreshSummaryBtn'),
+      statCount: document.getElementById('statCount'),
+      statSubtotal: document.getElementById('statSubtotal'),
+      statTax: document.getElementById('statTax'),
+      statTotal: document.getElementById('statTotal'),
+      typeBreakdown: document.getElementById('typeBreakdown'),
+      monthBreakdown: document.getElementById('monthBreakdown'),
+      clearAllBtn: document.getElementById('clearAllBtn'),
+      newBlankBtn: document.getElementById('newBlankBtn'),
+      downloadJsonBtn: document.getElementById('downloadJsonBtn')
+    };
+
+    function money(n) {
+      const num = Number(n || 0);
+      return new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(num);
+    }
+
+    function safeNum(value) {
+      const n = parseFloat(value);
+      return Number.isFinite(n) ? n : 0;
+    }
+
+    function uid() {
+      return crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random());
+    }
+
+    function getRecords() {
+      try {
+        return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+      } catch {
+        return [];
+      }
+    }
+
+    function setRecords(records) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+    }
+
+    function setStatus(text) {
+      els.statusBox.textContent = text;
+    }
+
+    function clearForm() {
+      editingId = null;
+      els.supplier.value = '';
+      els.invoiceDate.value = '';
+      els.category.value = 'Office Supplies';
+      els.subtotal.value = '';
+      els.gst.value = '';
+      els.pst.value = '';
+      els.totalTax.value = '';
+      els.total.value = '';
+      els.sourceFile.value = '';
+      els.rawText.value = '';
+    }
+
+    function loadEntry(record) {
+      editingId = record.id;
+      els.supplier.value = record.supplier || '';
+      els.invoiceDate.value = record.invoiceDate || '';
+      els.category.value = record.category || 'Other';
+      els.subtotal.value = record.subtotal ?? '';
+      els.gst.value = record.gst ?? '';
+      els.pst.value = record.pst ?? '';
+      els.totalTax.value = record.totalTax ?? '';
+      els.total.value = record.total ?? '';
+      els.sourceFile.value = record.sourceFile || '';
+      els.rawText.value = record.rawText || '';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function currentFormRecord() {
+      return {
+        id: editingId || uid(),
+        supplier: els.supplier.value.trim(),
+        invoiceDate: els.invoiceDate.value,
+        category: els.category.value,
+        subtotal: Number(safeNum(els.subtotal.value).toFixed(2)),
+        gst: Number(safeNum(els.gst.value).toFixed(2)),
+        pst: Number(safeNum(els.pst.value).toFixed(2)),
+        totalTax: Number(safeNum(els.totalTax.value).toFixed(2)),
+        total: Number(safeNum(els.total.value).toFixed(2)),
+        sourceFile: els.sourceFile.value.trim(),
+        rawText: els.rawText.value,
+        savedAt: new Date().toISOString()
+      };
+    }
+
+    function recalcAmounts() {
+      const subtotal = safeNum(els.subtotal.value);
+      const gst = safeNum(els.gst.value);
+      const pst = safeNum(els.pst.value);
+      const totalTax = gst + pst;
+      els.totalTax.value = totalTax ? totalTax.toFixed(2) : '';
+
+      const currentTotal = safeNum(els.total.value);
+      if (!currentTotal && subtotal) {
+        els.total.value = (subtotal + totalTax).toFixed(2);
+      } else if (currentTotal && subtotal && !gst && !pst) {
+        const computedTax = currentTotal - subtotal;
+        if (computedTax >= 0) {
+          els.totalTax.value = computedTax.toFixed(2);
+        }
+      }
+    }
+
+    function inferCategory(text) {
+      const t = text.toLowerCase();
+      if (/uber|airbnb|flight|hotel|travel|airport|westjet|air canada|booking/.test(t)) return 'Travel';
+      if (/restaurant|cafe|coffee|meal|food|doordash|skip|uber eats/.test(t)) return 'Meals';
+      if (/shell|esso|petro|fuel|gas station/.test(t)) return 'Fuel';
+      if (/staples|office|printer|paper|stationery/.test(t)) return 'Office Supplies';
+      if (/software|subscription|adobe|microsoft|google workspace/.test(t)) return 'Software';
+      if (/courier|shipping|post|fedex|ups|purolator/.test(t)) return 'Shipping';
+      if (/rent|lease/.test(t)) return 'Rent';
+      return 'Other';
+    }
+
+    function normalizeDate(raw) {
+      if (!raw) return '';
+      const parts = raw.replace(/\./g, '/').replace(/-/g, '/').match(/(\d{1,4})\/(\d{1,2})\/(\d{1,4})/);
+      if (!parts) return '';
+      let a = parseInt(parts[1], 10);
+      let b = parseInt(parts[2], 10);
+      let c = parseInt(parts[3], 10);
+
+      let year, month, day;
+      if (String(a).length === 4) {
+        year = a; month = b; day = c;
+      } else if (String(c).length === 4) {
+        year = c;
+        if (a > 12 && b <= 12) { day = a; month = b; }
+        else { month = a; day = b; }
+      } else {
+        return '';
+      }
+
+      if (!year || !month || !day || month < 1 || month > 12 || day < 1 || day > 31) return '';
+      return `${year.toString().padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    }
+
+    function extractDate(text) {
+      const patterns = [
+        /(\d{4}[\/\-.]\d{1,2}[\/\-.]\d{1,2})/,
+        /(\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{4})/
+      ];
+      for (const pattern of patterns) {
+        const m = text.match(pattern);
+        if (m) {
+          const d = normalizeDate(m[1]);
+          if (d) return d;
+        }
+      }
+      return '';
+    }
+
+    function getAllAmounts(text) {
+      const amounts = [...text.matchAll(/(?:\$\s*)?(\d{1,3}(?:,\d{3})*|\d+)\.\d{2}/g)]
+        .map(m => parseFloat(m[1].replace(/,/g, '')))
+        .filter(n => Number.isFinite(n));
+      return amounts;
+    }
+
+    function pickLargestAmount(text) {
+      const amounts = getAllAmounts(text);
+      if (!amounts.length) return 0;
+      return Math.max(...amounts);
+    }
+
+    function labeledAmount(text, labels) {
+      const lines = text.split(/\n+/);
+      for (const line of lines) {
+        const lower = line.toLowerCase();
+        if (labels.some(label => lower.includes(label))) {
+          const matches = [...line.matchAll(/(?:\$\s*)?(\d{1,3}(?:,\d{3})*|\d+)\.\d{2}/g)]
+            .map(m => parseFloat(m[1].replace(/,/g, '')));
+          if (matches.length) return matches[matches.length - 1];
+        }
+      }
+      return 0;
+    }
+
+    function extractSupplier(text, fallbackFileName = '') {
+      const lines = text.split(/\n+/).map(s => s.trim()).filter(Boolean);
+      const candidates = lines
+        .slice(0, 8)
+        .filter(line => !/invoice|receipt|tax|gst|pst|hst|total|subtotal|date|cashier|change/i.test(line))
+        .sort((a, b) => b.length - a.length);
+      return candidates[0] || fallbackFileName.replace(/\.[^.]+$/, '') || '';
+    }
+
+    function parseReceiptText(text, fileName) {
+      const total = labeledAmount(text, ['total', 'amount due', 'balance due', 'grand total']) || pickLargestAmount(text);
+      const subtotal = labeledAmount(text, ['subtotal', 'sub total', 'before tax']) || 0;
+      let gst = labeledAmount(text, ['gst', 'hst', 'gst/hst']) || 0;
+      let pst = labeledAmount(text, ['pst', 'qst']) || 0;
+      let totalTax = labeledAmount(text, ['tax', 'total tax']) || 0;
+
+      if (!totalTax && (gst || pst)) totalTax = gst + pst;
+      if (!subtotal && total && totalTax) {
+        const candidate = total - totalTax;
+        if (candidate >= 0) subtotal = candidate;
+      }
+      if (!totalTax && total && subtotal) {
+        const candidate = total - subtotal;
+        if (candidate >= 0) totalTax = candidate;
+      }
+
+      if (totalTax && !gst && !pst) {
+        gst = Number((totalTax / 2).toFixed(2));
+        pst = Number((totalTax - gst).toFixed(2));
+      }
+
+      return {
+        supplier: extractSupplier(text, fileName),
+        invoiceDate: extractDate(text),
+        category: inferCategory(text),
+        subtotal: Number((subtotal || 0).toFixed(2)),
+        gst: Number((gst || 0).toFixed(2)),
+        pst: Number((pst || 0).toFixed(2)),
+        totalTax: Number((totalTax || 0).toFixed(2)),
+        total: Number((total || 0).toFixed(2)),
+        sourceFile: fileName,
+        rawText: text
+      };
+    }
+
+    function fillForm(data) {
+      els.supplier.value = data.supplier || '';
+      els.invoiceDate.value = data.invoiceDate || '';
+      els.category.value = data.category || 'Other';
+      els.subtotal.value = data.subtotal ? Number(data.subtotal).toFixed(2) : '';
+      els.gst.value = data.gst ? Number(data.gst).toFixed(2) : '';
+      els.pst.value = data.pst ? Number(data.pst).toFixed(2) : '';
+      els.totalTax.value = data.totalTax ? Number(data.totalTax).toFixed(2) : '';
+      els.total.value = data.total ? Number(data.total).toFixed(2) : '';
+      els.sourceFile.value = data.sourceFile || '';
+      els.rawText.value = data.rawText || '';
+    }
+
+    async function ocrImageBlob(blob, statusPrefix = 'Reading image') {
+      const { data } = await Tesseract.recognize(blob, 'eng', {
+        logger: m => {
+          if (m.status === 'recognizing text') {
+            setStatus(`${statusPrefix}... ${Math.round((m.progress || 0) * 100)}%`);
+          }
+        }
+      });
+      return data.text || '';
+    }
+
+    async function processImageFile(file) {
+      setStatus(`Reading image receipt: ${file.name}`);
+      const text = await ocrImageBlob(file, `OCR on ${file.name}`);
+      const parsed = parseReceiptText(text, file.name);
+      fillForm(parsed);
+      setStatus(`Finished image OCR for ${file.name}. Review the fields before saving.`);
+    }
+
+    async function renderPdfPageToBlob(page, scale = 2) {
+      const viewport = page.getViewport({ scale });
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      await page.render({ canvasContext: context, viewport }).promise;
+      return await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+    }
+
+    async function processPdfFile(file) {
+      setStatus(`Opening PDF receipt: ${file.name}`);
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const pdf = await pdfjsLib.getDocument({ data: bytes }).promise;
+      let combinedText = '';
+
+      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+        setStatus(`Reading PDF ${file.name} - page ${pageNum} of ${pdf.numPages}`);
+        const page = await pdf.getPage(pageNum);
+        const textContent = await page.getTextContent();
+        const pageText = textContent.items.map(item => item.str).join(' ').trim();
+
+        if (pageText.length > 25) {
+          combinedText += `\n--- Page ${pageNum} ---\n${pageText}\n`;
+        } else {
+          const imgBlob = await renderPdfPageToBlob(page, 2);
+          const ocrText = await ocrImageBlob(imgBlob, `OCR on ${file.name} page ${pageNum}`);
+          combinedText += `\n--- Page ${pageNum} OCR ---\n${ocrText}\n`;
+        }
+      }
+
+      const parsed = parseReceiptText(combinedText, file.name);
+      fillForm(parsed);
+      setStatus(`Finished PDF extraction for ${file.name}. Review the fields before saving.`);
+    }
+
+    async function processSingleFile(file) {
+      if (file.type.startsWith('image/')) {
+        await processImageFile(file);
+      } else if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+        await processPdfFile(file);
+      } else {
+        throw new Error(`Unsupported file type: ${file.name}`);
+      }
+    }
+
+    function addPendingFiles(files) {
+      const incoming = [...files].filter(file => {
+        const ok = file.type.startsWith('image/') || file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+        return ok;
+      });
+      pendingFiles.push(...incoming);
+      renderPendingFiles();
+      setStatus(`${pendingFiles.length} file(s) ready to process.`);
+    }
+
+    function renderPendingFiles() {
+      els.previewArea.innerHTML = '';
+      if (!pendingFiles.length) {
+        els.previewArea.innerHTML = '<div class="note">No pending files.</div>';
+        return;
+      }
+
+      pendingFiles.forEach((file, idx) => {
+        const box = document.createElement('div');
+        box.className = 'card';
+        box.style.padding = '12px';
+
+        const header = document.createElement('div');
+        header.className = 'row';
+        header.style.justifyContent = 'space-between';
+        header.innerHTML = `<div><strong>${file.name}</strong><div class="tiny muted">${Math.round(file.size / 1024)} KB</div></div>`;
+
+        const actions = document.createElement('div');
+        actions.className = 'row';
+        const processBtn = document.createElement('button');
+        processBtn.className = 'secondary';
+        processBtn.textContent = 'Process';
+        processBtn.onclick = async () => {
+          try {
+            await processSingleFile(file);
+          } catch (err) {
+            setStatus(`Error processing ${file.name}: ${err.message}`);
+          }
+        };
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'danger';
+        removeBtn.textContent = 'Remove';
+        removeBtn.onclick = () => {
+          pendingFiles.splice(idx, 1);
+          renderPendingFiles();
+        };
+        actions.appendChild(processBtn);
+        actions.appendChild(removeBtn);
+        header.appendChild(actions);
+        box.appendChild(header);
+
+        if (file.type.startsWith('image/')) {
+          const img = document.createElement('img');
+          img.className = 'thumb';
+          img.src = URL.createObjectURL(file);
+          box.appendChild(img);
+        } else {
+          const note = document.createElement('div');
+          note.className = 'note';
+          note.textContent = 'PDF file ready. The app will extract text from the PDF, and if the PDF is scanned it will run OCR on each page.';
+          box.appendChild(note);
+        }
+        els.previewArea.appendChild(box);
+      });
+    }
+
+    function saveCurrentEntry() {
+      const records = getRecords();
+      const entry = currentFormRecord();
+      const index = records.findIndex(r => r.id === entry.id);
+      if (index >= 0) records[index] = entry;
+      else records.unshift(entry);
+      setRecords(records);
+      renderRecords();
+      renderSummary();
+      setStatus(`Saved ${entry.supplier || 'receipt'} successfully.`);
+      clearForm();
+    }
+
+    function deleteRecord(id) {
+      const records = getRecords().filter(r => r.id !== id);
+      setRecords(records);
+      renderRecords();
+      renderSummary();
+    }
+
+    function renderRecords() {
+      const records = getRecords();
+      els.recordsTableBody.innerHTML = '';
+      if (!records.length) {
+        els.recordsTableBody.innerHTML = '<tr><td colspan="10" class="muted">No saved receipts yet.</td></tr>';
+        return;
+      }
+
+      records.forEach(record => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${record.invoiceDate || ''}</td>
+          <td>${record.supplier || ''}</td>
+          <td><span class="tag">${record.category || 'Other'}</span></td>
+          <td>${money(record.subtotal)}</td>
+          <td>${money(record.gst)}</td>
+          <td>${money(record.pst)}</td>
+          <td>${money(record.totalTax)}</td>
+          <td>${money(record.total)}</td>
+          <td>${record.sourceFile || ''}</td>
+          <td></td>
+        `;
+        const actionCell = tr.lastElementChild;
+        const editBtn = document.createElement('button');
+        editBtn.className = 'secondary';
+        editBtn.textContent = 'Edit';
+        editBtn.onclick = () => loadEntry(record);
+        const delBtn = document.createElement('button');
+        delBtn.className = 'danger';
+        delBtn.textContent = 'Delete';
+        delBtn.style.marginLeft = '8px';
+        delBtn.onclick = () => deleteRecord(record.id);
+        actionCell.appendChild(editBtn);
+        actionCell.appendChild(delBtn);
+        els.recordsTableBody.appendChild(tr);
+      });
+    }
+
+    function groupBy(records, keyFn) {
+      return records.reduce((acc, record) => {
+        const key = keyFn(record);
+        acc[key] = acc[key] || [];
+        acc[key].push(record);
+        return acc;
+      }, {});
+    }
+
+    function renderSummary() {
+      const records = getRecords();
+      const subtotal = records.reduce((s, r) => s + safeNum(r.subtotal), 0);
+      const tax = records.reduce((s, r) => s + safeNum(r.totalTax), 0);
+      const total = records.reduce((s, r) => s + safeNum(r.total), 0);
+
+      els.statCount.textContent = String(records.length);
+      els.statSubtotal.textContent = money(subtotal);
+      els.statTax.textContent = money(tax);
+      els.statTotal.textContent = money(total);
+
+      const byType = groupBy(records, r => r.category || 'Other');
+      const typeLines = Object.entries(byType)
+        .sort((a, b) => b[1].reduce((s, r) => s + safeNum(r.total), 0) - a[1].reduce((s, r) => s + safeNum(r.total), 0))
+        .map(([type, list]) => `${type}: ${list.length} receipt(s), ${money(list.reduce((s, r) => s + safeNum(r.total), 0))}`);
+      els.typeBreakdown.innerHTML = typeLines.length ? typeLines.join('<br>') : 'No data yet.';
+
+      const byMonth = groupBy(records, r => (r.invoiceDate || 'No date').slice(0, 7) || 'No date');
+      const monthLines = Object.entries(byMonth)
+        .sort((a, b) => a[0] < b[0] ? 1 : -1)
+        .map(([month, list]) => `${month}: ${list.length} receipt(s), ${money(list.reduce((s, r) => s + safeNum(r.total), 0))}`);
+      els.monthBreakdown.innerHTML = monthLines.length ? monthLines.join('<br>') : 'No data yet.';
+    }
+
+    function exportRows() {
+      const records = getRecords();
+      const rows = records.map(r => ({
+        Date: r.invoiceDate || '',
+        Supplier: r.supplier || '',
+        Type: r.category || '',
+        Subtotal: safeNum(r.subtotal),
+        'GST/HST': safeNum(r.gst),
+        PST: safeNum(r.pst),
+        'Total Tax': safeNum(r.totalTax),
+        Total: safeNum(r.total),
+        'Source File': r.sourceFile || '',
+        'Raw Text': r.rawText || ''
+      }));
+
+      const subtotal = rows.reduce((s, r) => s + safeNum(r.Subtotal), 0);
+      const gst = rows.reduce((s, r) => s + safeNum(r['GST/HST']), 0);
+      const pst = rows.reduce((s, r) => s + safeNum(r.PST), 0);
+      const totalTax = rows.reduce((s, r) => s + safeNum(r['Total Tax']), 0);
+      const total = rows.reduce((s, r) => s + safeNum(r.Total), 0);
+
+      rows.push({});
+      rows.push({
+        Date: 'TOTALS',
+        Supplier: '',
+        Type: '',
+        Subtotal: Number(subtotal.toFixed(2)),
+        'GST/HST': Number(gst.toFixed(2)),
+        PST: Number(pst.toFixed(2)),
+        'Total Tax': Number(totalTax.toFixed(2)),
+        Total: Number(total.toFixed(2)),
+        'Source File': '',
+        'Raw Text': ''
+      });
+      return rows;
+    }
+
+    function exportCsv() {
+      const rows = exportRows();
+      const ws = XLSX.utils.json_to_sheet(rows);
+      const csv = XLSX.utils.sheet_to_csv(ws);
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'receipts_export.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function exportXlsx() {
+      const rows = exportRows();
+      const ws = XLSX.utils.json_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Receipts');
+      XLSX.writeFile(wb, 'receipts_export.xlsx');
+    }
+
+    function downloadJsonBackup() {
+      const blob = new Blob([JSON.stringify(getRecords(), null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'receipts_backup.json';
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    els.fileInput.addEventListener('change', e => addPendingFiles(e.target.files));
+
+    ['dragenter', 'dragover'].forEach(evt => {
+      els.dropZone.addEventListener(evt, e => {
+        e.preventDefault();
+        els.dropZone.classList.add('dragover');
+      });
+    });
+
+    ['dragleave', 'drop'].forEach(evt => {
+      els.dropZone.addEventListener(evt, e => {
+        e.preventDefault();
+        els.dropZone.classList.remove('dragover');
+      });
+    });
+
+    els.dropZone.addEventListener('drop', e => addPendingFiles(e.dataTransfer.files));
+
+    els.processAllBtn.addEventListener('click', async () => {
+      if (!pendingFiles.length) {
+        setStatus('No pending files to process.');
+        return;
+      }
+      for (const file of pendingFiles) {
+        try {
+          await processSingleFile(file);
+        } catch (err) {
+          setStatus(`Error processing ${file.name}: ${err.message}`);
+        }
+      }
+    });
+
+    els.clearPendingBtn.addEventListener('click', () => {
+      pendingFiles = [];
+      renderPendingFiles();
+      setStatus('Pending files cleared.');
+    });
+
+    els.saveEntryBtn.addEventListener('click', saveCurrentEntry);
+    els.clearFormBtn.addEventListener('click', clearForm);
+    els.newBlankBtn.addEventListener('click', clearForm);
+    els.recalcBtn.addEventListener('click', recalcAmounts);
+    els.refreshSummaryBtn.addEventListener('click', renderSummary);
+    els.exportCsvBtn.addEventListener('click', exportCsv);
+    els.exportXlsxBtn.addEventListener('click', exportXlsx);
+    els.downloadJsonBtn.addEventListener('click', downloadJsonBackup);
+
+    [els.subtotal, els.gst, els.pst, els.total].forEach(input => {
+      input.addEventListener('input', recalcAmounts);
+    });
+
+    els.clearAllBtn.addEventListener('click', () => {
+      const ok = confirm('Delete all saved receipts from this browser?');
+      if (!ok) return;
+      localStorage.removeItem(STORAGE_KEY);
+      renderRecords();
+      renderSummary();
+      setStatus('All saved receipt data deleted from this browser.');
+    });
+
+    renderPendingFiles();
+    renderRecords();
+    renderSummary();
+  </script>
+</body>
+</html>
 
