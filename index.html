@@ -4,7 +4,6 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Receipt Extractor</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.3.136/pdf.min.mjs" type="module"></script>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
   <style>
@@ -793,7 +792,7 @@
 
     let gray = 0.299 * r + 0.587 * g + 0.114 * b;
 
-    gray = gray < 160 ? 0 : 255;
+    gray = gray < 180 ? 0 : 255;
 
     data[i] = gray;
     data[i + 1] = gray;
@@ -808,8 +807,9 @@
 async function ocrImageBlob(blob, statusPrefix = 'Reading image') {
   const processedBlob = await preprocessImageBlob(blob);
 
-  const { data } = await Tesseract.recognize(processedBlob, 'eng', {
-    logger: m => {
+ const { data } = await Tesseract.recognize(processedBlob, 'eng', {
+  tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.$:/- ',
+  logger: m => {
       if (m.status === 'recognizing text') {
         setStatus(`${statusPrefix}... ${Math.round((m.progress || 0) * 100)}%`);
       }
