@@ -814,7 +814,7 @@ async function ocrImageBlob(blob, statusPrefix = 'Reading image') {
         setStatus(`${statusPrefix}... ${Math.round((m.progress || 0) * 100)}%`);
       }
     },
-    tessedit_pageseg_mode: 6
+    tessedit_pageseg_mode: 4
   });
 
   return data.text || '';
@@ -859,7 +859,7 @@ async function renderPdfPageToBlob(page, scale = 3) {
         if (pageText.length > 25) {
           combinedText += `\n--- Page ${pageNum} ---\n${pageText}\n`;
         } else {
-          const imgBlob = await renderPdfPageToBlob(page, 2);
+          const imgBlob = await renderPdfPageToBlob(page, 3);
           const ocrText = await ocrImageBlob(imgBlob, `OCR on ${file.name} page ${pageNum}`);
           combinedText += `\n--- Page ${pageNum} OCR ---\n${ocrText}\n`;
         }
