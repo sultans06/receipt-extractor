@@ -719,7 +719,7 @@
 
     function parseReceiptText(text, fileName) {
       const total = labeledAmount(text, ['total', 'amount due', 'balance due', 'grand total']) || pickLargestAmount(text);
-      const subtotal = labeledAmount(text, ['subtotal', 'sub total', 'before tax']) || 0;
+      let subtotal = labeledAmount(text, ['subtotal', 'sub total', 'before tax']) || 0;
       let gst = labeledAmount(text, ['gst', 'hst', 'gst/hst']) || 0;
       let pst = labeledAmount(text, ['pst', 'qst']) || 0;
       let totalTax = labeledAmount(text, ['tax', 'total tax']) || 0;
@@ -813,8 +813,7 @@ async function ocrImageBlob(blob, statusPrefix = 'Reading image') {
       if (m.status === 'recognizing text') {
         setStatus(`${statusPrefix}... ${Math.round((m.progress || 0) * 100)}%`);
       }
-    },
-    tessedit_pageseg_mode: 4
+    }
   });
 
   return data.text || '';
